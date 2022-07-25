@@ -1,5 +1,6 @@
-import aiogram.types
-from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
+import aiogram.types.keyboard_button
+from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove, \
+    KeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 import types
 
@@ -11,5 +12,20 @@ def get_is_user_already_exists() -> ReplyKeyboardMarkup:
     kb.adjust(2)
     return kb.as_markup(resize_keyboard=True)
 
-def inline_yes_or_no():
-    pass
+
+def check_users_data():
+    kb = ReplyKeyboardBuilder()
+    kb.button(text="Да")
+    kb.button(text="Вернуться назад")
+    kb.adjust(2)
+    return kb.as_markup(resize_keyboard=True)
+
+
+def main_panel():
+    kb = ReplyKeyboardBuilder()
+    kb.row(
+        KeyboardButton(text="Статус отчета"),
+        KeyboardButton(text="Новый отчет")
+    )
+    kb.row(KeyboardButton(text="Связаться с тех поддержкой"))
+    return kb.as_markup(resize_keyboard=True)
