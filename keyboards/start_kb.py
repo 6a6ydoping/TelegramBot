@@ -7,8 +7,8 @@ import types
 
 def get_is_user_already_exists() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()
-    kb.button(text="Новый пользователь")
-    kb.button(text="Существующий пользователь")
+    kb.button(text="Зарегистрироваться")
+    kb.button(text="Авторизоваться")
     kb.adjust(2)
     return kb.as_markup(resize_keyboard=True)
 
@@ -28,4 +28,12 @@ def main_panel():
         KeyboardButton(text="Новый отчет")
     )
     kb.row(KeyboardButton(text="Связаться с тех поддержкой"))
+    return kb.as_markup(resize_keyboard=True)
+
+
+def get_user_classification():
+    kb = ReplyKeyboardBuilder()
+    kb.button(text="Юридическое лицо")
+    kb.button(text="Физическое лицо")
+    kb.adjust(2)
     return kb.as_markup(resize_keyboard=True)

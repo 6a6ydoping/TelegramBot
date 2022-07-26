@@ -5,7 +5,7 @@ from config import manager_id
 from aiogram.dispatcher.filters.text import Text
 from aiogram.dispatcher.filters import Command
 from aiogram.types import ReplyKeyboardRemove, Message
-from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel
+from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification
 from aiogram.dispatcher.fsm.context import FSMContext
 from db.user_db import add_user, is_user_in_db, get_status
 from aiogram.dispatcher.fsm.state import State, StatesGroup
@@ -18,47 +18,40 @@ class Form(StatesGroup):
     user_name = State()
     user_phone = State()
     user_email = State()
+    user_classification = State()
     login = State()
     signed_in = State()
-
-
-user_array = []
-old_user_info = []
 
 
 @router.message(Command(commands=['start']))
 async def cmd_start(message: Message, state: FSMContext):
     print(message.chat.id)
-    old_user_info, user_array = [], []
     await state.set_state(None)
     await message.answer(
-        'Выберите вариант',
+        'Авторизуйтесь или создайте новую учетную запись',
         reply_markup=get_is_user_already_exists()
     )
 
 
-@router.message(Text(text='Новый пользователь', ignore_case=True))
+@router.message(Text(text='Зарегистрироваться', ignore_case=True))
 async def new_user(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.user_name)
     await message.answer(
-        'Введите ваше ФИО',
-        reply_markup=ReplyKeyboardRemove(),
+        'Выберите вариант',
+        reply_markup= get_user_classification(),
     )
 
 
 @router.message(Form.user_name)
 async def get_user_name(message: Message, state: FSMContext) -> None:
     await state.update_data(user_name=message.text)
-    user_array.append(message.text)
     await message.answer('Введите ваш номер телефона')
     await state.set_state(Form.user_phone)
-    print(user_array)
 
 
 @router.message(Form.user_phone)
 async def get_user_phone(message: Message, state: FSMContext) -> None:
     await state.update_data(user_phone=message.text)
-    user_array.append(message.text)
     await message.answer('Введите вашу электронную почту')
     await state.set_state(Form.user_email)
 
@@ -66,9 +59,9 @@ async def get_user_phone(message: Message, state: FSMContext) -> None:
 @router.message(Form.user_email)
 async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(user_email=message.text)
-    user_array.append(message.text)
+    data = await state.get_data()
     await message.answer(
-        f"Нажмите <b><i>да</i></b> если данные верны\n ФИО: <b>{user_array[0]}</b> \n Номер: <b>{user_array[1]}</b> \n Почта: <b>{user_array[2]}</b>",
+        f"Нажмите <b><i>да</i></b> если данные верны\n ФИО: <b>{data['user_name']}</b> \n Номер: <b>{data['user_phone']}</b> \n Почта: <b>{data['user_email']}</b>",
         reply_markup=check_users_data()
     )
     await state.set_state(None)
@@ -76,24 +69,23 @@ async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
 
 @router.message(Text(text="Да"))
 async def user_created_successfully(message: Message, state: FSMContext, bot: Bot) -> None:
-    if user_array:
+    data = await state.get_data()
+    if data:
         await message.answer(
             'Ваши данные были занесены в базу данных и отправлены менеджеру!',
         )
-        user_array.append(message.text)
         await bot.send_message(chat_id=manager_id, text=message.text)
-        add_user(user_array)
+        add_user([data['user_name'], data['user_phone'], data['user_email']])
         await state.set_state(Form.signed_in)
         await message.answer(
-            f'Добро пожаловать {user_array[0]}!',
+            f'Добро пожаловать {data["user_name"]}!',
             reply_markup=main_panel()
         )
-        user_array.clear()
+
 
 
 @router.message(Text(text='Вернуться назад'))
 async def go_back(message: Message, state: FSMContext, bot: Bot) -> None:
-    user_array.clear()
     await state.clear()
     await message.answer(
         'Выберите вариант',
@@ -101,7 +93,7 @@ async def go_back(message: Message, state: FSMContext, bot: Bot) -> None:
     )
 
 
-@router.message(Text(text='Существующий пользователь', ignore_case=True))
+@router.message(Text(text='Авторизоваться', ignore_case=True))
 async def existing_user(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.login)
     await message.answer(
@@ -112,22 +104,23 @@ async def existing_user(message: Message, state: FSMContext) -> None:
 
 @router.message(Form.login)
 async def get_login(message: Message, state: FSMContext) -> None:
-    old_user_info.append(message.text)
     if is_user_in_db(message.text):
+        data = await state.update_data(user_name=message.text)
         await state.set_state(Form.signed_in)
-        await message.answer(f'Добро пожаловать, {message.text}!', reply_markup=main_panel())
+        await message.answer(f'Добро пожаловать, {data["user_name"]}!', reply_markup=main_panel())
     else:
         await message.answer(
             'Такого пользователя нет в базе данных.',
             reply_markup=get_is_user_already_exists()
         )
-        old_user_info.clear()
 
 
 @router.message(Text(text="Связаться с тех поддержкой"), Form.signed_in)
 async def signed_in(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    user_name = data["user_name"]
     await message.answer(
-        f"{old_user_info[0]}, ваша заявка была передана тех поддержке, чтобы вам ответили не меняйте ник до того как "
+        f"{user_name}, ваша заявка была передана тех поддержке, чтобы вам ответили не меняйте ник до того как "
         f"с вами свяжется менеджер.")
     await bot.send_message(manager_id,
                            f"В {get_datetime_now()} пришла заявка для тех поддержки от пользователя @{message.from_user.username}")
