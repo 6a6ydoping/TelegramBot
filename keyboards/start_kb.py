@@ -23,11 +23,8 @@ def check_users_data():
 
 def main_panel():
     kb = ReplyKeyboardBuilder()
-    kb.row(
-        KeyboardButton(text="Статус отчета"),
-        KeyboardButton(text="Новый отчет")
-    )
-    kb.row(KeyboardButton(text="Связаться с тех поддержкой"))
+    kb.button(text="Новый запрос")
+    kb.button(text="Связаться с тех поддержкой")
     return kb.as_markup(resize_keyboard=True)
 
 
@@ -35,5 +32,13 @@ def get_user_classification():
     kb = ReplyKeyboardBuilder()
     kb.button(text="Юридическое лицо")
     kb.button(text="Физическое лицо")
+    kb.adjust(2)
+    return kb.as_markup(resize_keyboard=True)
+
+
+def get_request_keyboard():
+    kb = ReplyKeyboardBuilder()
+    kb.button(text="Новый отчет")
+    kb.button(text="Запрос в бухгалтерию")
     kb.adjust(2)
     return kb.as_markup(resize_keyboard=True)

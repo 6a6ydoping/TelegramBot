@@ -5,7 +5,7 @@ from config import manager_id
 from aiogram.dispatcher.filters.text import Text
 from aiogram.dispatcher.filters import Command
 from aiogram.types import ReplyKeyboardRemove, Message
-from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification
+from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, get_request_keyboard
 from aiogram.dispatcher.fsm.context import FSMContext
 from db.user_db import add_user, is_user_in_db, get_status
 from aiogram.dispatcher.fsm.state import State, StatesGroup
@@ -19,6 +19,7 @@ class Form(StatesGroup):
     user_phone = State()
     user_email = State()
     user_classification = State()
+    user_company = State()
     login = State()
     signed_in = State()
 
@@ -35,17 +36,44 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @router.message(Text(text='Зарегистрироваться', ignore_case=True))
 async def new_user(message: Message, state: FSMContext) -> None:
-    await state.set_state(Form.user_name)
+    await state.set_state(Form.user_classification)
     await message.answer(
         'Выберите вариант',
-        reply_markup= get_user_classification(),
+        reply_markup=get_user_classification(),
+    )
+
+
+@router.message(Form.user_classification)
+async def set_user_classification(message: Message, state: FSMContext) -> None:
+    if message.text == 'Физическое лицо':
+        await state.update_data(user_classification='Физическое лицо')
+        await state.set_state(Form.user_name)
+        await message.answer(
+            'Напишите свое ФИО',
+            reply_markup=ReplyKeyboardRemove()
+        )
+    elif message.text == 'Юридическое лицо':
+        await state.update_data(user_classification='Юридическое лицо')
+        await state.set_state(Form.user_company)
+        await message.answer(
+            'Напишите название вашей компании',
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+
+@router.message(Form.user_company)
+async def get_user_company(message: Message, state: FSMContext) -> None:
+    await state.update_data(user_company=message.text)
+    await state.set_state(Form.user_name)
+    await message.answer(
+        'Напишите свое ФИО',
     )
 
 
 @router.message(Form.user_name)
 async def get_user_name(message: Message, state: FSMContext) -> None:
     await state.update_data(user_name=message.text)
-    await message.answer('Введите ваш номер телефона')
+    await message.answer('Введите ваш номер телефона', reply_markup=ReplyKeyboardRemove)
     await state.set_state(Form.user_phone)
 
 
@@ -60,10 +88,23 @@ async def get_user_phone(message: Message, state: FSMContext) -> None:
 async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(user_email=message.text)
     data = await state.get_data()
-    await message.answer(
-        f"Нажмите <b><i>да</i></b> если данные верны\n ФИО: <b>{data['user_name']}</b> \n Номер: <b>{data['user_phone']}</b> \n Почта: <b>{data['user_email']}</b>",
-        reply_markup=check_users_data()
-    )
+    if data['user_classification'] == 'Физическое лицо':
+        await message.answer(
+            f"Нажмите <b><i>да</i></b> если данные верны"
+            f"\n ФИО: <b>{data['user_name']}</b> "
+            f"\n Номер: <b>{data['user_phone']}</b> "
+            f"\n Почта: <b>{data['user_email']}</b>",
+            reply_markup=check_users_data()
+        )
+    elif data['user_classification'] == 'Юридическое лицо':
+        await message.answer(
+            f"Нажмите <b><i>да</i></b> если данные верны"
+            f"\n Название компании: <b>{data['user_company']}</b>"
+            f"\n ФИО: <b>{data['user_name']}</b> "
+            f"\n Номер: <b>{data['user_phone']}</b> "
+            f"\n Почта: <b>{data['user_email']}</b>",
+            reply_markup=check_users_data()
+        )
     await state.set_state(None)
 
 
@@ -83,7 +124,6 @@ async def user_created_successfully(message: Message, state: FSMContext, bot: Bo
         )
 
 
-
 @router.message(Text(text='Вернуться назад'))
 async def go_back(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.clear()
@@ -97,7 +137,7 @@ async def go_back(message: Message, state: FSMContext, bot: Bot) -> None:
 async def existing_user(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.login)
     await message.answer(
-        'Введите имя для авторизации информации',
+        'Введите <b>логин</b> для входа в личный кабинет',
         reply_markup=ReplyKeyboardRemove()
     )
 
@@ -110,7 +150,7 @@ async def get_login(message: Message, state: FSMContext) -> None:
         await message.answer(f'Добро пожаловать, {data["user_name"]}!', reply_markup=main_panel())
     else:
         await message.answer(
-            'Такого пользователя нет в базе данных.',
+            'Пользователь не найден',
             reply_markup=get_is_user_already_exists()
         )
 
@@ -126,7 +166,9 @@ async def signed_in(message: Message, state: FSMContext, bot: Bot) -> None:
                            f"В {get_datetime_now()} пришла заявка для тех поддержки от пользователя @{message.from_user.username}")
 
 
-@router.message(Text(text="Статус отчета"), Form.signed_in)
+@router.message(Text(text="Новый запрос"), Form.signed_in)
 async def status_of_report(message: Message, state: FSMContext, bot: Bot) -> None:
-    status = get_status()
-    await message.answer()
+    await message.answer(
+        'Вы можете сделать запрос на <b>новый отчет</b> и запрос в <b>бухгалтерию</b>',
+        reply_markup=get_request_keyboard()
+    )
