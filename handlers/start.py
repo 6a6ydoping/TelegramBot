@@ -5,9 +5,10 @@ from config import manager_id
 from aiogram.dispatcher.filters.text import Text
 from aiogram.dispatcher.filters import Command
 from aiogram.types import ReplyKeyboardRemove, Message
-from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, get_request_keyboard
+from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, \
+    get_request_keyboard
 from aiogram.dispatcher.fsm.context import FSMContext
-from db.user_db import add_user, is_user_in_db, get_status
+from db.user_db import add_user, is_user_in_db, get_status, export_to_excel
 from aiogram.dispatcher.fsm.state import State, StatesGroup
 
 router = Router()
@@ -22,6 +23,7 @@ class Form(StatesGroup):
     user_company = State()
     login = State()
     signed_in = State()
+    user_accountant_req = State()
 
 
 @router.message(Command(commands=['start']))
@@ -43,6 +45,7 @@ async def new_user(message: Message, state: FSMContext) -> None:
     )
 
 
+# Юридическое или Физическое лицо
 @router.message(Form.user_classification)
 async def set_user_classification(message: Message, state: FSMContext) -> None:
     if message.text == 'Физическое лицо':
@@ -61,6 +64,7 @@ async def set_user_classification(message: Message, state: FSMContext) -> None:
         )
 
 
+# Узнать компанию Юридического лица
 @router.message(Form.user_company)
 async def get_user_company(message: Message, state: FSMContext) -> None:
     await state.update_data(user_company=message.text)
@@ -108,6 +112,7 @@ async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.set_state(None)
 
 
+# Пользователь проверяет введенные данные, если все верно, после сообщения "Да" данные сохраняются
 @router.message(Text(text="Да"))
 async def user_created_successfully(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
@@ -172,3 +177,29 @@ async def status_of_report(message: Message, state: FSMContext, bot: Bot) -> Non
         'Вы можете сделать запрос на <b>новый отчет</b> и запрос в <b>бухгалтерию</b>',
         reply_markup=get_request_keyboard()
     )
+
+
+@router.message(Text(text="Запрос в бухгалтерию"), Form.signed_in)
+async def get_accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
+    await message.answer(
+        f"Напишите ваш запрос",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await state.set_state(Form.user_accountant_req)
+
+
+@router.message(Form.user_accountant_req)
+async def accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
+    await state.update_data(user_accountant_req=message.text)
+    request_text = message.text + '\n\n Запрос в бухгалтерию от @' + message.from_user.username + ' в ' + str(get_datetime_now())
+    await bot.send_message(manager_id, request_text)
+    await message.answer(
+        'Ваш запрос был передан в бухгалтерию! Вам ответят в течении суток, не меняйте ник чтобы менеджер мог связаться с вами',
+        reply_markup=main_panel()
+    )
+    await state.set_state(Form.signed_in)
+
+
+@router.message(Text(text='csv'))
+async def csv_text(message: Message):
+    export_to_excel()

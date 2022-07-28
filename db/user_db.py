@@ -1,6 +1,8 @@
 import config
 import psycopg2
 import psycopg2.extras
+import openpyxl
+from openpyxl.styles import Font
 
 try:
     with psycopg2.connect(
@@ -56,6 +58,18 @@ try:
                     print(cur)
 
 
+            def export_to_excel():
+                with conn.cursor() as cur:
+                    script = 'SELECT * FROM all_users'
+                    SQL_for_file_output = "COPY ({0}) TO STDOUT WITH CSV HEADER".format(script)
+                    t_path_n_file = "C:\\Users\\Али\\PycharmProjects\\botv1\\db\\some_file.csv"
+                    try:
+                        with open(t_path_n_file, 'w') as f_output:
+                            cur.copy_expert(SQL_for_file_output, f_output)
+                            print('DONE')
+                    except psycopg2.Error as e:
+                        t_message = "Error: " + e + "/n query we ran: " + script + "/n t_path_n_file: " + t_path_n_file
+                        return 'DB ERROR'
 
 
 except Exception as error:
