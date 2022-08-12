@@ -1,17 +1,22 @@
 from aiogram import Router
 from aiogram import Bot
 from other_functions.time import get_datetime_now
-from config import manager_id
+from config import manager_id, ADMIN, manager_nick, analyst_nick
 from aiogram.dispatcher.filters.text import Text
 from aiogram.dispatcher.filters import Command
 from aiogram.types import ReplyKeyboardRemove, Message
 from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, \
     get_request_keyboard
 from aiogram.dispatcher.fsm.context import FSMContext
-from db.user_db import add_user, is_user_in_db, get_status, export_to_excel
+from db.all_clients_db import add_user, is_user_in_db, get_status, export_to_excel
 from aiogram.dispatcher.fsm.state import State, StatesGroup
+from filters.filter import ChatTypeFilter
+from aiogram.types import FSInputFile
 
 router = Router()
+router.message.filter(
+    ChatTypeFilter(chat_type=["group", "supergroup"])
+)
 
 
 class Form(StatesGroup):
@@ -22,6 +27,7 @@ class Form(StatesGroup):
     user_classification = State()
     user_company = State()
     login = State()
+    new_user = State()
     signed_in = State()
     user_accountant_req = State()
 
@@ -31,12 +37,12 @@ async def cmd_start(message: Message, state: FSMContext):
     print(message.chat.id)
     await state.set_state(None)
     await message.answer(
-        'Авторизуйтесь или создайте новую учетную запись',
+        'Добрый день! Вы уже являетесь нашим клиентом?',
         reply_markup=get_is_user_already_exists()
     )
 
 
-@router.message(Text(text='Зарегистрироваться', ignore_case=True))
+@router.message(Text(text='Я новый клиент', ignore_case=True))
 async def new_user(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.user_classification)
     await message.answer(
@@ -100,6 +106,7 @@ async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
             f"\n Почта: <b>{data['user_email']}</b>",
             reply_markup=check_users_data()
         )
+        await state.set_state(Form.new_user)
     elif data['user_classification'] == 'Юридическое лицо':
         await message.answer(
             f"Нажмите <b><i>да</i></b> если данные верны"
@@ -109,7 +116,35 @@ async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
             f"\n Почта: <b>{data['user_email']}</b>",
             reply_markup=check_users_data()
         )
-    await state.set_state(None)
+        await state.set_state(Form.new_user)
+
+
+@router.message(Form.new_user)
+async def new_user(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    await message.answer(
+        'Ваши данные отправлены менеджеру, с вами свяжутся в течении двух часов!',
+        reply_markup=ReplyKeyboardRemove()
+    )
+    if data['user_classification'] == 'Юридическое лицо':
+        await bot.send_message(chat_id=manager_id, text=(f"Запрос нового пользователя:"
+                                                         f"\n Классификация: <b>Юридическое лицо</b>"
+                                                         f"\n Название компании: <b>{data['user_company']}</b>"
+                                                         f"\n ФИО: <b>{data['user_name']}</b> "
+                                                         f"\n Номер: <b>{data['user_phone']}</b> "
+                                                         f"\n Почта: <b>{data['user_email']}</b>"
+                                                         f"\n Время: <b>{get_datetime_now()}</b>"
+                                                         ))
+    elif data['user_classification'] == 'Физическое лицо':
+        await bot.send_message(chat_id=manager_id, text=(f"Запрос нового пользователя:"
+                                                         f"\n Классификация: <b>Физическое лицо</b>"
+                                                         f"\n ФИО: <b>{data['user_name']}</b> "
+                                                         f"\n Номер: <b>{data['user_phone']}</b> "
+                                                         f"\n Почта: <b>{data['user_email']}</b>"
+                                                         f"\n Время: <b>{get_datetime_now()}</b>"
+                                                         ))
+    add_user([data['user_name'], data['user_phone'], data['user_email']])
+
 
 
 # Пользователь проверяет введенные данные, если все верно, после сообщения "Да" данные сохраняются
@@ -121,7 +156,7 @@ async def user_created_successfully(message: Message, state: FSMContext, bot: Bo
             'Ваши данные были занесены в базу данных и отправлены менеджеру!',
         )
         await bot.send_message(chat_id=manager_id, text=message.text)
-        add_user([data['user_name'], data['user_phone'], data['user_email']])
+        #add_user([data['user_name'], data['user_phone'], data['user_email']])
         await state.set_state(Form.signed_in)
         await message.answer(
             f'Добро пожаловать {data["user_name"]}!',
@@ -138,7 +173,7 @@ async def go_back(message: Message, state: FSMContext, bot: Bot) -> None:
     )
 
 
-@router.message(Text(text='Авторизоваться', ignore_case=True))
+@router.message(Text(text='Я существующий клиент', ignore_case=True))
 async def existing_user(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.login)
     await message.answer(
@@ -149,15 +184,9 @@ async def existing_user(message: Message, state: FSMContext) -> None:
 
 @router.message(Form.login)
 async def get_login(message: Message, state: FSMContext) -> None:
-    if is_user_in_db(message.text):
-        data = await state.update_data(user_name=message.text)
-        await state.set_state(Form.signed_in)
-        await message.answer(f'Добро пожаловать, {data["user_name"]}!', reply_markup=main_panel())
-    else:
-        await message.answer(
-            'Пользователь не найден',
-            reply_markup=get_is_user_already_exists()
-        )
+    data = await state.update_data(user_name=message.text)
+    await state.set_state(Form.signed_in)
+    await message.answer(f'Добро пожаловать, {data["user_name"]}!', reply_markup=main_panel())
 
 
 @router.message(Text(text="Связаться с тех поддержкой"), Form.signed_in)
@@ -179,27 +208,48 @@ async def status_of_report(message: Message, state: FSMContext, bot: Bot) -> Non
     )
 
 
-@router.message(Text(text="Запрос в бухгалтерию"), Form.signed_in)
+@router.message(Text(text="Связаться с бухгалтерией"), Form.signed_in)
 async def get_accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
     await message.answer(
-        f"Напишите ваш запрос",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    await state.set_state(Form.user_accountant_req)
-
-
-@router.message(Form.user_accountant_req)
-async def accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
-    await state.update_data(user_accountant_req=message.text)
-    request_text = message.text + '\n\n Запрос в бухгалтерию от @' + message.from_user.username + ' в ' + str(get_datetime_now())
-    await bot.send_message(manager_id, request_text)
-    await message.answer(
-        'Ваш запрос был передан в бухгалтерию! Вам ответят в течении суток, не меняйте ник чтобы менеджер мог связаться с вами',
+        'Напишите ваш запрос по этому адресу: ' + '@' + manager_nick,
         reply_markup=main_panel()
     )
-    await state.set_state(Form.signed_in)
+    await state.set_state(signed_in)
 
 
-@router.message(Text(text='csv'))
-async def csv_text(message: Message):
-    export_to_excel()
+@router.message(Text(text="Новый отчет"), Form.signed_in)
+async def new_report(message: Message, state: FSMContext, bot: Bot) -> None:
+    await message.answer(
+        'Свяжитесь с нашим менеджером, ' + '@' + manager_nick + '\n Вам ответят в течении двух часов!'
+    )
+
+
+# @router.message(Form.user_accountant_req)
+# async def accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
+#     await state.update_data(user_accountant_req=message.text)
+#     request_text = message.text + '\n\n Запрос в бухгалтерию от @' + message.from_user.id + ' в ' + str(
+#         get_datetime_now())
+#     await bot.send_message(manager_id, request_text)
+#     await message.answer(
+#         'Ваш запрос был передан в бухгалтерию! Вам ответят в течении суток, не меняйте ник чтобы менеджер мог связаться с вами',
+#         reply_markup=main_panel()
+#     )
+#     await state.set_state(Form.signed_in)
+
+# @router.message(Form.user_accountant_req)
+# async def accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
+#     await message.answer(
+#         'Напишите ваш запрос по этому адресу: ' + manager_nick,
+#         reply_markup= main_panel()
+#     )
+#     await state.set_state(signed_in)
+
+@router.message(Command(commands=['csv']))
+async def csv_text(message: Message, bot: Bot):
+    print('start')
+    if message.from_user.username in ADMIN:
+        print('middle')
+        export_to_excel()
+        file = FSInputFile('C:\\Users\\Али\\PycharmProjects\\botv1\\db\\some_file.csv')
+        await bot.send_document(message.chat.id, file)
+        print('finish')

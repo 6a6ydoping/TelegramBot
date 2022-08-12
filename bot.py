@@ -1,7 +1,9 @@
 import asyncio
 from aiogram import Bot, Dispatcher
 from handlers import start
-from db.user_db import create_db
+from db.all_clients_db import create_all_clients_db
+from db.new_clients import create_new_clients_db
+
 
 
 
@@ -11,7 +13,9 @@ async def main():
 
     dp.include_router(start.router)
 
-    create_db()
+    create_all_clients_db()
+    create_new_clients_db()
+
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 

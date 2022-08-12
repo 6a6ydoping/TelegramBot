@@ -1,8 +1,6 @@
 import config
 import psycopg2
 import psycopg2.extras
-import openpyxl
-from openpyxl.styles import Font
 
 try:
     with psycopg2.connect(
@@ -12,31 +10,34 @@ try:
             password=config.password,
     ) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            def create_db():
+            def create_all_clients_db():
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     command = ''
                     create_script = '''
-                            CREATE TABLE IF NOT EXISTS all_users(
-                            name varchar,
-                            email varchar,
+                            CREATE TABLE IF NOT EXISTS all_clients(
+                            id int not null auto_increment,
+                            login varchar,
                             phone varchar,
-                            status varchar
-                            )
+                            department varchar,
+                            manager varchar,
+                            date date,
+                            PRIMARY KEY (ID)
+                            );
                         '''
                     cur.execute(create_script)
-                    cur.execute('SELECT * FROM all_users')
+                    cur.execute('SELECT * FROM all_clients')
                     conn.commit()
 
 
             def add_user(user_array_info):
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     print('start of add_user')
-                    name, phone, email = user_array_info[0], user_array_info[1], user_array_info[2]
-                    insert_script = 'INSERT INTO all_users (name, phone, email, status) VALUES (%s, %s, %s, %s)'
-                    cur.execute(insert_script, (name, phone, email, '0%'))
-                    print('End of add_user')
-                    print(f'{name} added')
-                    conn.commit()
+                    # name, phone, email = user_array_info[0], user_array_info[1], user_array_info[2]
+                    # insert_script = 'INSERT INTO all_users (name, phone, email) VALUES (%s, %s, %s)'
+                    # cur.execute(insert_script, (name, phone, email))
+                    # print('End of add_user')
+                    # print(f'{name} added')
+                    # conn.commit()
 
 
             def is_user_in_db(username):
@@ -50,6 +51,7 @@ try:
                         return True
                     else:
                         return False
+
 
             def get_status(username):
                 with conn.cursor() as cur:
