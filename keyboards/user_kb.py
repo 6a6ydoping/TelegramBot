@@ -13,6 +13,14 @@ def get_is_user_already_exists() -> ReplyKeyboardMarkup:
     return kb.as_markup(resize_keyboard=True)
 
 
+def url_button_instruction():
+    builder = InlineKeyboardBuilder()
+    builder.row(aiogram.types.InlineKeyboardButton(
+        text="Инструкция",
+        url="https://telegra.ph/Instrukciya-po-ispolzovaniyu-telegram-bota-Analytics-Assistant-08-19")
+    )
+    return builder.as_markup()
+
 def check_users_data():
     kb = ReplyKeyboardBuilder()
     kb.button(text="Да")

@@ -1,9 +1,8 @@
 from typing import Union
-
 from aiogram.dispatcher.filters import BaseFilter
 from aiogram.types import Message
 
-from config import admin_shortnames
+from config import admin_shortnames, manager_shortnames
 
 
 class ChatTypeFilter(BaseFilter):
@@ -22,4 +21,12 @@ class IsAdmin(BaseFilter):
             print('Its an Admin')
             return True
         print('It is not an Admin')
+        return False
+
+
+class IsManager(BaseFilter):
+    async def __call__(self, message: Message) -> bool:
+        if message.from_user.username in manager_shortnames:
+            print('Its manager')
+            return True
         return False

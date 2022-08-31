@@ -1,12 +1,13 @@
 from aiogram import Router
 from aiogram import Bot
-from other_functions.time import get_datetime_now
+from other_functions.time import get_datetime_now, is_working_time
 from config import manager_id, admin_shortnames, manager_shortnames, analyst_shortnames, accountant_id
 from aiogram.dispatcher.filters.text import Text
 from aiogram.dispatcher.filters import Command
 from aiogram.types import ReplyKeyboardRemove, Message
-from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, \
-    get_request_keyboard
+from keyboards.user_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, \
+    get_request_keyboard, url_button_instruction
+from keyboards.manager_kb import get_inline_is_done
 from aiogram.dispatcher.fsm.context import FSMContext
 from db.all_requests_db import add_request, is_user_in_db, get_status, export_to_excel
 from db.new_clients_db import add_new_user
@@ -21,6 +22,7 @@ router.message.filter(
 
 
 class Form(StatesGroup):
+    start = State()
     user_info = State()
     user_name = State()
     user_phone = State()
@@ -40,10 +42,13 @@ async def cmd_start(message: Message, state: FSMContext):
     print(message.chat.id)
     await state.set_state(None)
     await message.answer(
-        'Добрый день! Вы уже являетесь нашим клиентом?',
+        'Рады приветствовать Вас!',
         reply_markup=get_is_user_already_exists()
     )
-
+    await message.answer(
+        'Вы уже являетесь нашим клиентом?',
+        reply_markup = url_button_instruction()
+    )
 
 @router.message(Text(text='Я новый клиент', ignore_case=True))
 async def new_user(message: Message, state: FSMContext) -> None:
@@ -61,7 +66,7 @@ async def set_user_classification(message: Message, state: FSMContext) -> None:
         await state.update_data(user_classification='Физическое лицо')
         await state.set_state(Form.user_name)
         await message.answer(
-            'Напишите свое ФИО',
+            'Введите ваши Фамилию, Имя и Отчество',
             reply_markup=ReplyKeyboardRemove()
         )
     elif message.text == 'Юридическое лицо':
@@ -79,7 +84,7 @@ async def get_user_company(message: Message, state: FSMContext) -> None:
     await state.update_data(user_company=message.text)
     await state.set_state(Form.user_name)
     await message.answer(
-        'Напишите свое ФИО',
+        'Введите ваши Фамилию, Имя и Отчество',
     )
 
 
@@ -122,13 +127,19 @@ async def get_user_email(message: Message, state: FSMContext, bot: Bot) -> None:
         await state.set_state(Form.new_user)
 
 
-@router.message(Text(text='Да'), Form.new_user)
+@router.message(Text(text='Да', ignore_case=True), Form.new_user)
 async def new_user(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
-    await message.answer(
-        'Ваши данные отправлены менеджеру, с вами свяжутся в течении двух часов!',
-        reply_markup=ReplyKeyboardRemove()
-    )
+    if is_working_time():
+        await message.answer(
+            'Ваши данные направлены нашему менеджеру, с вами свяжутся в течении одного часа!',
+            reply_markup=ReplyKeyboardRemove()
+        )
+    else:
+        await message.answer(
+            'Ваши данные направлены нашему менеджеру, с вами свяжутся в начале следующего рабочего дня!',
+            reply_markup=ReplyKeyboardRemove
+        )
     if data['user_classification'] == 'Юридическое лицо':
         await bot.send_message(chat_id=manager_id, text=(f"Запрос на создание нового пользователя:"
                                                          f"\n Классификация: <b>Юридическое лицо</b>"
@@ -217,9 +228,13 @@ async def signed_in(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     user_phone = data["user_phone"]
     user_login = data["user_login"]
-    await message.answer(
-        f"Ваша заявка была передана тех поддержке, чтобы вам ответили не меняйте ник до того как "
-        f"с вами свяжется менеджер.")
+    if is_working_time():
+        await message.answer(
+            f"Ваша заявка была направлена тех поддержке, с вами свяжутся в течении одного часа!")
+    else:
+        await message.answer(
+            f"Ваша заявка была направлена тех поддержке, с вами свяжутся в начале следующего рабочего дня!"
+        )
     await bot.send_message(manager_id,
                            f"В {get_datetime_now()[0]}  {get_datetime_now()[1]} пришла заявка для тех поддержки\nЛогин:{user_login}\nНомер телефона:{user_phone} ")
     add_request([data['user_login'], data['user_phone'], 'tech_support', 'Ali', get_datetime_now()[0], get_datetime_now()[1]])
@@ -237,10 +252,15 @@ async def status_of_report(message: Message, state: FSMContext, bot: Bot) -> Non
 async def get_accountant_request(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     user_phone = data['user_phone']
-    await message.answer(
-        'Ваша заявка была передана в бухгалтерию, с вами свяжутся в течении двух часов!',
-        reply_markup=main_panel()
-    )
+    if is_working_time():
+        await message.answer(
+            'Ваша заявка была направлена в бухгалтерию, с вами свяжутся в течении часа!',
+            reply_markup=main_panel()
+        )
+    else:
+        await message.answer(
+            'Ваша заявка была направлена в бухгалтерию, вам ответят в начале следующего рабочего дня!'
+        )
     await bot.send_message(accountant_id,
                            f"В {get_datetime_now()[0]}  {get_datetime_now()[1]} пришла заявка в бухгалтерию по номеру телефона {user_phone}")
     add_request(
@@ -251,10 +271,15 @@ async def get_accountant_request(message: Message, state: FSMContext, bot: Bot) 
 async def new_report(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     user_phone = data['user_phone']
-    await message.answer(
-        f"Ваш запрос был передан менеджеру, с вами свяжутся в течении двух часов!",
-        reply_markup=main_panel()
-    )
+    if is_working_time():
+        await message.answer(
+            f"Ваш запрос был передан менеджеру, с вами свяжутся в течении двух часов!",
+            reply_markup=main_panel()
+        )
+    else:
+        await message.answer(
+            f"Ваш запрос был передан менеджеру, с вами свяжутся в начале следующего рабочего дня!"
+        )
     await bot.send_message(manager_id,
                            f"В {get_datetime_now()[0]}  {get_datetime_now()[1]} \nЗапрос на новый отчет по номеру телефона {user_phone}")
     add_request(

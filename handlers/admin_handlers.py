@@ -7,7 +7,7 @@ from config import admin_shortnames, manager_shortnames, analyst_shortnames
 from aiogram.dispatcher.filters.text import Text
 from aiogram.dispatcher.filters import Command
 from aiogram.types import ReplyKeyboardRemove, Message
-from keyboards.start_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, \
+from keyboards.user_kb import get_is_user_already_exists, check_users_data, main_panel, get_user_classification, \
     get_request_keyboard
 from aiogram.dispatcher.fsm.context import FSMContext
 from db.all_requests_db import add_request, is_user_in_db, get_status
@@ -51,6 +51,11 @@ async def adding_new_manager(message: Message, state: FSMContext):
     add_manager(message.text)
     await message.answer('Менеджер успешно добавлен!')
     await state.clear()
+
+
+@router.message(Command(commands=['delete_manager']))
+async def cmd_delete_manager(message: Message, state: FSMContext):
+    pass
 
 
 @router.message(Command(commands=['manager_list']))

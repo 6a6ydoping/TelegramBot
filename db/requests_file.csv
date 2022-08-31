@@ -1,0 +1,8 @@
+id,login,phone,department,manager,date,time
+1,some_login,777777,tech_support,Ali,2022-08-17,14:52:26
+2,some_login,777777,accountant,Buhgalter Name,2022-08-17,14:52:29
+3,some_login,777777,new request,Manager_Name,2022-08-17,14:52:31
+4,user,87654321,tech_support,Ali,2022-08-17,16:10:04
+5,user,87654321,accountant,Buhgalter Name,2022-08-17,16:10:30
+6,user,87654321,new request,Manager_Name,2022-08-17,16:10:41
+7,qwerty@pochta.kz,+77777777,accountant,Buhgalter Name,2022-08-17,16:16:18
